@@ -12,11 +12,25 @@ class ServicesTests(SimpleTestCase):
 
     def test_geocode_caches_hit_and_miss(self):
         with patch("contacts.services.requests.get") as get:
-            get.return_value.json.return_value = [{"lat": "1.5", "lon": "2.5"}]
+            get.return_value.json.return_value = [
+                {"lat": "1.5", "lon": "2.5", "display_name": "Somewhere, Poland"}
+            ]
             get.return_value.raise_for_status.return_value = None
-            self.assertEqual(services.geocode_city("nowhere"), (1.5, 2.5))
-            self.assertEqual(services.geocode_city("nowhere"), (1.5, 2.5))
+            place = services.geocode_city("nowhere")
+            self.assertEqual((place.lat, place.lon), (1.5, 2.5))
+            self.assertEqual(place.display_name, "Somewhere, Poland")
+            services.geocode_city("nowhere")
             self.assertEqual(get.call_count, 1)  # second call hit the cache
+
+    def test_geocode_requests_settlements_only(self):
+        """Without featureType, "Londo" matches a river in the DRC."""
+        with patch("contacts.services.requests.get") as get:
+            get.return_value.json.return_value = [
+                {"lat": "1.0", "lon": "2.0", "display_name": "X"}
+            ]
+            get.return_value.raise_for_status.return_value = None
+            services.geocode_city("anyplace")
+            self.assertEqual(get.call_args.kwargs["params"]["featureType"], "settlement")
 
         with patch("contacts.services.requests.get") as get:
             get.return_value.json.return_value = []
@@ -62,8 +76,9 @@ class ServicesTests(SimpleTestCase):
         with patch("contacts.services.requests.get") as get:
             get.return_value.raise_for_status.return_value = None
             get.return_value.json.side_effect = [
-                [{"lat": "52.2", "lon": "21.0"}],
+                [{"lat": "52.2", "lon": "21.0", "display_name": "Warszawa, Poland"}],
                 {"current": {"temperature_2m": 20, "relative_humidity_2m": 55, "wind_speed_10m": 5}},
             ]
             result = services.get_city_weather("warszawa")
             self.assertEqual(result["temperature"], 20)
+            self.assertEqual(result["location"], "Warszawa, Poland")

@@ -1,10 +1,24 @@
 """Weather lookup for contact cities: geocode -> forecast, both cached."""
 import logging
+from typing import NamedTuple
 
 import requests
 from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
+
+
+class Place(NamedTuple):
+    """A geocoded location, kept with the label Nominatim actually matched.
+
+    Carrying display_name is what lets the UI show *which* place it found:
+    "Londo" resolves to a river in the DRC, and without that label the user
+    just sees plausible-looking weather for somewhere they never meant.
+    """
+
+    lat: float
+    lon: float
+    display_name: str
 
 # Nominatim rejects requests with no User-Agent (403), so we always identify ourselves.
 USER_AGENT = "supra-contacts/1.0"
@@ -33,7 +47,7 @@ class WeatherUnavailable(Exception):
     """
 
 
-def geocode_city(city: str) -> tuple[float, float]:
+def geocode_city(city: str) -> Place:
     key = f"geo:{city}"
     cached = cache.get(key)
     if cached is not None:
@@ -44,7 +58,16 @@ def geocode_city(city: str) -> tuple[float, float]:
     try:
         resp = requests.get(
             "https://nominatim.openstreetmap.org/search",
-            params={"q": city, "format": "json", "limit": 1},
+            params={
+                "q": city,
+                "format": "json",
+                "limit": 1,
+                # Without this, Nominatim happily matches rivers, mountains and
+                # bus stops: "Londo" returns a river in the DRC rather than
+                # failing, and the user gets confident weather for the wrong
+                # continent. "settlement" covers cities, towns and villages.
+                "featureType": "settlement",
+            },
             headers={"User-Agent": USER_AGENT},
             timeout=TIMEOUT,
         )
@@ -58,9 +81,10 @@ def geocode_city(city: str) -> tuple[float, float]:
         cache.set(key, _GEOCODE_MISS, GEOCODE_MISS_TTL)
         raise CityNotFound(city)
 
-    coords = (float(results[0]["lat"]), float(results[0]["lon"]))
-    cache.set(key, coords, GEOCODE_TTL)
-    return coords
+    top = results[0]
+    place = Place(float(top["lat"]), float(top["lon"]), top.get("display_name", city))
+    cache.set(key, place, GEOCODE_TTL)
+    return place
 
 
 def fetch_weather(lat: float, lon: float) -> dict:
@@ -111,6 +135,10 @@ def get_city_weather(city: str) -> dict:
     if cached is not None:
         return cached
 
-    weather = fetch_weather(*geocode_city(normalized))
+    place = geocode_city(normalized)
+    weather = fetch_weather(place.lat, place.lon)
+    # Pass the matched place name through so the UI can show what was actually
+    # resolved, rather than leaving a near-miss looking authoritative.
+    weather["location"] = place.display_name
     cache.set(key, weather, WEATHER_TTL)
     return weather

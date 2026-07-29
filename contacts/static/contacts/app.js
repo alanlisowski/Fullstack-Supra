@@ -68,6 +68,16 @@
         if (select) select.addEventListener("change", function () { select.form.submit(); });
     }
 
+    // Nominatim returns the full administrative chain, e.g. "Londo, Yabanguia,
+    // Gothèye, Tillabéri, Niger". Town plus country is enough to spot a wrong
+    // match without turning the cell into a paragraph.
+    function shortenLocation(displayName) {
+        if (!displayName) return "";
+        var parts = displayName.split(",").map(function (p) { return p.trim(); });
+        if (parts.length < 2) return parts[0] || "";
+        return parts[0] + ", " + parts[parts.length - 1];
+    }
+
     function initWeather() {
         var rows = document.querySelectorAll("tr[data-city]");
         if (!rows.length) return;
@@ -83,11 +93,25 @@
         cities.forEach(function (city) {
             var cells = document.querySelectorAll('tr[data-city="' + CSS.escape(city) + '"] .weather-cell');
 
-            function render(text, tooltip, cssClass) {
+            // Second line names the place actually matched. Shown inline rather
+            // than as a title tooltip: a near-miss like "Londo" for "London"
+            // returns real weather for Niger, and the user only discovers that
+            // if they can see it without knowing to hover.
+            function render(text, subtitle, cssClass) {
                 cells.forEach(function (cell) {
-                    cell.textContent = text;
-                    cell.title = tooltip || "";
-                    if (cssClass) cell.classList.add(cssClass);
+                    cell.textContent = "";
+
+                    var main = document.createElement("div");
+                    main.textContent = text;
+                    if (cssClass) main.classList.add(cssClass);
+                    cell.appendChild(main);
+
+                    if (subtitle) {
+                        var note = document.createElement("div");
+                        note.className = "small text-muted";
+                        note.textContent = subtitle;
+                        cell.appendChild(note);
+                    }
                 });
             }
 
@@ -98,9 +122,9 @@
                     // Anything else is our problem, not theirs — say so plainly
                     // rather than implying they mistyped.
                     if (resp.status === 404) {
-                        render("Unknown city", "No place matching “" + city + "”. Check the spelling.", "text-danger");
+                        render("Unknown city", "Check the spelling.", "text-danger");
                     } else {
-                        render("—", "Weather service is temporarily unavailable.", "text-muted");
+                        render("—", "Weather service unavailable.", "text-muted");
                     }
                     return null;
                 })
@@ -108,7 +132,7 @@
                     if (!data) return;
                     render(
                         Math.round(data.temperature) + "°C, " + data.humidity + "% hum, " + data.windspeed + " km/h wind",
-                        ""
+                        shortenLocation(data.location)
                     );
                 })
                 .catch(function () {
