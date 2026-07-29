@@ -1,7 +1,34 @@
 import re
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
+
+PHONE_PATTERN = re.compile(r"\+?\d{9,15}")
+
+
+def normalize_phone(value: str) -> str:
+    """Strip separators so "+48 123-456 (789)" and "+48123456789" are one number.
+
+    Shared by Contact.save() and the serializer/form validators: uniqueness has
+    to be checked against the same normalized form that gets stored, otherwise
+    validation passes and the database constraint fails with a 500.
+    """
+    return re.sub(r"[\s\-()]", "", value or "")
+
+
+def validate_phone_format(value: str) -> None:
+    """Require 9-15 digits with an optional leading "+".
+
+    Normalizes first so this holds whether it receives raw user input or an
+    already-stripped number — DRF runs field validators before validate_phone(),
+    so a formatted "+48 123 456 789" arrives here with its spaces intact.
+    """
+    if not PHONE_PATTERN.fullmatch(normalize_phone(value)):
+        raise ValidationError(
+            "Enter 9 to 15 digits, optionally prefixed with '+'.",
+            code="invalid_phone",
+        )
 
 
 class ContactStatus(models.Model):
@@ -24,7 +51,7 @@ class Contact(models.Model):
     )
     first_name = models.CharField(max_length=80)
     last_name = models.CharField(max_length=80)
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20, validators=[validate_phone_format])
     email = models.EmailField()
     city = models.CharField(max_length=100)
     status = models.ForeignKey(
@@ -53,8 +80,7 @@ class Contact(models.Model):
         return f"{self.first_name} {self.last_name}"
 
     def save(self, *args, **kwargs):
-        # Strip whitespace/dashes/parens so "+48 123-456 (789)" and
-        # "+48123456789" collide under the per-owner unique constraint.
-        # "+" isn't in the stripped set, so a leading one survives untouched.
-        self.phone = re.sub(r"[\s\-()]", "", self.phone)
+        # Last line of defence: bulk_create() and .update() bypass save(), so
+        # callers that skip it must normalize themselves.
+        self.phone = normalize_phone(self.phone)
         super().save(*args, **kwargs)
