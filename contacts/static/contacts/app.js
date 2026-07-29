@@ -82,17 +82,38 @@
 
         cities.forEach(function (city) {
             var cells = document.querySelectorAll('tr[data-city="' + CSS.escape(city) + '"] .weather-cell');
+
+            function render(text, tooltip, cssClass) {
+                cells.forEach(function (cell) {
+                    cell.textContent = text;
+                    cell.title = tooltip || "";
+                    if (cssClass) cell.classList.add(cssClass);
+                });
+            }
+
             fetch("/api/weather/?city=" + encodeURIComponent(city))
                 .then(function (resp) {
-                    if (!resp.ok) throw new Error("weather unavailable");
-                    return resp.json();
+                    if (resp.ok) return resp.json();
+                    // 404 means the city itself is wrong, which the user can fix.
+                    // Anything else is our problem, not theirs — say so plainly
+                    // rather than implying they mistyped.
+                    if (resp.status === 404) {
+                        render("Unknown city", "No place matching “" + city + "”. Check the spelling.", "text-danger");
+                    } else {
+                        render("—", "Weather service is temporarily unavailable.", "text-muted");
+                    }
+                    return null;
                 })
                 .then(function (data) {
-                    var text = Math.round(data.temperature) + "°C, " + data.humidity + "% hum, " + data.windspeed + " km/h wind";
-                    cells.forEach(function (cell) { cell.textContent = text; });
+                    if (!data) return;
+                    render(
+                        Math.round(data.temperature) + "°C, " + data.humidity + "% hum, " + data.windspeed + " km/h wind",
+                        ""
+                    );
                 })
                 .catch(function () {
-                    cells.forEach(function (cell) { cell.textContent = "—"; });
+                    // Network error reaching our own server.
+                    render("—", "Could not load weather.", "text-muted");
                 });
         });
     }

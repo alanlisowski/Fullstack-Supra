@@ -1,12 +1,13 @@
 from django.db.models import Q
-from django.http import Http404, JsonResponse
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from contacts.models import Contact
 from contacts.serializers import ContactSerializer
-from contacts.services import get_city_weather
+from contacts.services import CityNotFound, WeatherUnavailable, get_city_weather
 
 ORDERING_ALLOWED = {"last_name", "-last_name", "created_at", "-created_at"}
 
@@ -43,7 +44,24 @@ class ContactViewSet(ModelViewSet):
 @permission_classes([IsAuthenticated])
 def city_weather(request):
     city = request.query_params.get("city")
-    weather = get_city_weather(city) if city else None
-    if weather is None:
-        raise Http404("weather unavailable for this city")
-    return JsonResponse(weather)
+    if not city:
+        return Response(
+            {"error": "missing_city", "detail": "Provide a ?city= parameter."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        return Response(get_city_weather(city))
+    except CityNotFound:
+        # 404: the city genuinely doesn't exist. Only the user can fix this.
+        return Response(
+            {"error": "city_not_found", "detail": f"No place matching '{city}'."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except WeatherUnavailable:
+        # 503: our upstreams are down. Nothing wrong with the contact's data,
+        # and the client should feel free to retry later.
+        return Response(
+            {"error": "weather_unavailable", "detail": "Weather service is temporarily unavailable."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
