@@ -134,3 +134,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ],
 }
+
+LOGIN_REDIRECT_URL = 'contact-list'
+LOGOUT_REDIRECT_URL = 'login'
+LOGIN_URL = 'login'

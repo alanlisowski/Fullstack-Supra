@@ -12,7 +12,7 @@ class ContactApiTests(APITestCase):
         self.bob = User.objects.create_user("bob", password="x")
         self.alice_contact = Contact.objects.create(
             owner=self.alice, first_name="A", last_name="Owner",
-            phone="+1", email="a@x.com", city="Warsaw", status=self.status,
+            phone="+48111111111", email="a@x.com", city="Warsaw", status=self.status,
         )
 
     def test_requires_authentication(self):
@@ -32,7 +32,7 @@ class ContactApiTests(APITestCase):
     def test_create_sets_owner_from_request_not_payload(self):
         self.client.force_login(self.bob)
         resp = self.client.post(reverse("contact-list"), {
-            "first_name": "B", "last_name": "New", "phone": "+2",
+            "first_name": "B", "last_name": "New", "phone": "+48222222222",
             "email": "b@x.com", "city": "Krakow", "status": self.status.id,
         })
         self.assertEqual(resp.status_code, 201, resp.content)
