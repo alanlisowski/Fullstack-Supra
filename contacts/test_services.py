@@ -67,6 +67,23 @@ class ServicesTests(SimpleTestCase):
             with self.assertRaises(services.WeatherUnavailable):
                 services.get_city_weather("x")
 
+    def test_repeat_lookup_makes_no_further_requests(self):
+        """The optimization the brief asks about: N contacts in one city cost
+        one round trip, not N, and nothing at all within the cache window."""
+        with patch("contacts.services.requests.get") as get:
+            get.return_value.raise_for_status.return_value = None
+            get.return_value.json.side_effect = [
+                [{"lat": "52.2", "lon": "21.0", "display_name": "Warszawa, Poland"}],
+                {"current": {"temperature_2m": 20, "relative_humidity_2m": 55, "wind_speed_10m": 5}},
+            ]
+
+            services.get_city_weather("Warszawa")
+            calls_after_first = get.call_count  # one geocode + one forecast
+
+            services.get_city_weather("Warszawa")
+            services.get_city_weather("  warszawa ")  # same city, different spelling
+            self.assertEqual(get.call_count, calls_after_first)
+
     def test_outages_are_not_cached(self):
         """Transient failures must not poison the cache for the next request."""
         with patch("contacts.services.requests.get", side_effect=services.requests.RequestException):

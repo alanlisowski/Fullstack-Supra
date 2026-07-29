@@ -5,7 +5,6 @@ from contacts.models import Contact, ContactStatus
 
 DEMO_PASSWORD = "demo12345"
 
-# (username, [(first, last, phone, email, city, status_slug), ...])
 DEMO_DATA = [
     ("demo1", [
         ("Anna", "Kowalska", "+48111111111", "anna.kowalska@example.com", "Warszawa", "new"),
