@@ -27,6 +27,8 @@ TIMEOUT = 5
 GEOCODE_TTL = 60 * 60 * 24 * 7  # coordinates don't change; cache a week
 GEOCODE_MISS_TTL = 60 * 60  # typo'd city: don't hammer the API every page load
 WEATHER_TTL = 60 * 30
+CANDIDATES_TTL = 60 * 60 * 24  # place names are stable
+CANDIDATES_LIMIT = 5
 
 _GEOCODE_MISS = "__miss__"  # cache.get pickles values, so identity won't survive a round-trip; compare by value
 
@@ -120,6 +122,65 @@ def fetch_weather(lat: float, lon: float) -> dict:
         # half-filled row; treat it the same as a failed request.
         logger.warning("fetch_weather: unexpected payload for %s,%s", lat, lon)
         raise WeatherUnavailable("unexpected weather payload") from exc
+
+
+def _candidate_label(display_name: str) -> str:
+    """Condense Nominatim's address chain into something pickable.
+
+    "Springfield, Sangamon County, Illinois, United States" becomes
+    "Springfield, Illinois, United States" — the region is what tells same-named
+    towns apart, so only the middle is dropped.
+    """
+    parts = [p.strip() for p in display_name.split(",") if p.strip()]
+    if len(parts) >= 3:
+        label = f"{parts[0]}, {parts[-2]}, {parts[-1]}"
+    else:
+        label = ", ".join(parts)
+    return label[:100]  # Contact.city is CharField(max_length=100)
+
+
+def find_settlements(city: str) -> list[str]:
+    """Places matching this name, most relevant first.
+
+    Used to ask "did you mean?" when a name is ambiguous. Storing the label the
+    user picks means the ambiguity is resolved once, at write time, instead of
+    being re-guessed on every page load.
+    """
+    normalized = city.strip().casefold()
+    if not normalized:
+        return []
+
+    key = f"candidates:{normalized}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={
+                "q": normalized,
+                "format": "json",
+                "limit": CANDIDATES_LIMIT,
+                "featureType": "settlement",
+            },
+            headers={"User-Agent": USER_AGENT},
+            timeout=TIMEOUT,
+        )
+        resp.raise_for_status()
+        results = resp.json()
+    except requests.RequestException as exc:
+        logger.warning("find_settlements: request failed for %r", city)
+        raise WeatherUnavailable("geocoding service unreachable") from exc
+
+    labels = []
+    for result in results:
+        label = _candidate_label(result.get("display_name", ""))
+        if label and label not in labels:
+            labels.append(label)
+
+    cache.set(key, labels, CANDIDATES_TTL)
+    return labels
 
 
 def get_city_weather(city: str) -> dict:

@@ -17,6 +17,21 @@
                 {{ field }}
                 {# d-block reveals server-side errors: Bootstrap only shows .invalid-feedback next to an .is-invalid input, which our JS adds but Django's widgets do not. #}
                 <div class="invalid-feedback {% if field.errors %}d-block{% endif %}">{{ field.errors|first }}</div>
+
+                {% if field.name == "city" and form.city_candidates %}
+                    <div class="border rounded bg-light p-2 mt-2">
+                        <p class="small text-muted mb-2">Did you mean:</p>
+                        {% for candidate in form.city_candidates %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="city_choice"
+                                       id="city-choice-{{ forloop.counter }}" value="{{ candidate }}"
+                                       {% if forloop.first %}checked{% endif %}>
+                                <label class="form-check-label small" for="city-choice-{{ forloop.counter }}">{{ candidate }}</label>
+                            </div>
+                        {% endfor %}
+                        <p class="small text-muted mb-0 mt-2">Pick one and save again, or edit the city field to search differently.</p>
+                    </div>
+                {% endif %}
             </div>
         {% endfor %}
         <button type="submit" class="btn btn-primary">Save</button>

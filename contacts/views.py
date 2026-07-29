@@ -100,6 +100,9 @@ def _import_rows(rows, owner):
                     "status": status.pk if status else "",
                 },
                 owner=owner,
+                # Geocoding every row would be slow and would trip Nominatim's
+                # rate limit; imported cities are taken at face value.
+                check_city=False,
             )
             if form.is_valid():
                 contact = form.save(commit=False)

@@ -9,6 +9,7 @@ from contacts.models import (
     region_for_phone,
     validate_phone_format,
 )
+from contacts.services import WeatherUnavailable, find_settlements
 
 
 class ContactForm(forms.ModelForm):
@@ -43,8 +44,12 @@ class ContactForm(forms.ModelForm):
             "status": forms.Select(attrs={"class": "form-select"}),
         }
 
-    def __init__(self, *args, owner=None, **kwargs):
+    def __init__(self, *args, owner=None, check_city=True, **kwargs):
         self.owner = owner
+        # CSV import turns this off: one geocode request per row would be both
+        # unusably slow and a good way to get rate-limited by Nominatim.
+        self.check_city = check_city
+        self.city_candidates = []
         super().__init__(*args, **kwargs)
         # When editing, pre-select the country the stored number belongs to.
         if self.instance.pk and not self.is_bound:
@@ -76,7 +81,42 @@ class ContactForm(forms.ModelForm):
             self.add_error("phone", "You already have a contact with this phone number.")
         else:
             cleaned["phone"] = normalized
+
+        self._resolve_city(cleaned)
         return cleaned
+
+    def _resolve_city(self, cleaned):
+        """Ask the user which place they meant, when the name is ambiguous.
+
+        Resolving this at write time means the stored city is unambiguous, so
+        the weather lookup never has to guess again on the read path.
+        """
+        city = (cleaned.get("city") or "").strip()
+        if not city or not self.check_city:
+            return
+
+        # The user already answered the question on the previous submit.
+        picked = (self.data.get("city_choice") or "").strip()
+        if picked:
+            cleaned["city"] = picked
+            return
+
+        # Editing without touching the city shouldn't re-open a settled question.
+        if self.instance.pk and self.instance.city == city:
+            return
+
+        try:
+            candidates = find_settlements(city)
+        except WeatherUnavailable:
+            # A dead geocoder must never stop someone saving a contact.
+            return
+
+        # One match, or the user typed a label we already offered: nothing to ask.
+        if len(candidates) < 2 or city in candidates:
+            return
+
+        self.city_candidates = candidates
+        self.add_error("city", "Several places share this name — pick the one you meant.")
 
     def _duplicate_exists(self, **lookup):
         """Per-owner uniqueness check, excluding the row being edited."""
