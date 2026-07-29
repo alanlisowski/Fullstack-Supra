@@ -1,0 +1,30 @@
+{% extends "contacts/base.html" %}
+{% load static %}
+
+{% block content %}
+<h1 class="h3 mb-3">{% if form.instance.pk %}Edit contact{% else %}Add contact{% endif %}</h1>
+
+{% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+{% endif %}
+
+<div class="col-md-6 col-lg-4">
+    <form method="post" id="contact-form" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="mb-3">
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                {{ field }}
+                {# d-block reveals server-side errors: Bootstrap only shows .invalid-feedback next to an .is-invalid input, which our JS adds but Django's widgets do not. #}
+                <div class="invalid-feedback {% if field.errors %}d-block{% endif %}">{{ field.errors|first }}</div>
+            </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a href="{% url 'contact-list' %}" class="btn btn-link">Cancel</a>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'contacts/app.js' %}"></script>
+{% endblock %}

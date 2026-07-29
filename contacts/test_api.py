@@ -16,22 +16,22 @@ class ContactApiTests(APITestCase):
         )
 
     def test_requires_authentication(self):
-        resp = self.client.get(reverse("contact-list"))
+        resp = self.client.get(reverse("contact-api-list"))
         self.assertEqual(resp.status_code, 403)
 
     def test_owner_cannot_see_or_modify_others_contact(self):
         self.client.force_login(self.bob)
-        list_resp = self.client.get(reverse("contact-list"))
+        list_resp = self.client.get(reverse("contact-api-list"))
         self.assertEqual(list_resp.json(), [])
 
-        detail_url = reverse("contact-detail", args=[self.alice_contact.id])
+        detail_url = reverse("contact-api-detail", args=[self.alice_contact.id])
         self.assertEqual(self.client.get(detail_url).status_code, 404)
         self.assertEqual(self.client.delete(detail_url).status_code, 404)
         self.assertEqual(Contact.objects.filter(id=self.alice_contact.id).exists(), True)
 
     def test_create_sets_owner_from_request_not_payload(self):
         self.client.force_login(self.bob)
-        resp = self.client.post(reverse("contact-list"), {
+        resp = self.client.post(reverse("contact-api-list"), {
             "first_name": "B", "last_name": "New", "phone": "+48222222222",
             "email": "b@x.com", "city": "Krakow", "status": self.status.id,
         })
@@ -40,13 +40,13 @@ class ContactApiTests(APITestCase):
 
     def test_ordering_rejects_unknown_field(self):
         self.client.force_login(self.alice)
-        resp = self.client.get(reverse("contact-list"), {"ordering": "email"})
+        resp = self.client.get(reverse("contact-api-list"), {"ordering": "email"})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.json()), 1)  # falls back to default, doesn't 500
 
     def test_search_matches_city(self):
         self.client.force_login(self.alice)
-        resp = self.client.get(reverse("contact-list"), {"search": "warsaw"})
+        resp = self.client.get(reverse("contact-api-list"), {"search": "warsaw"})
         self.assertEqual(len(resp.json()), 1)
-        resp = self.client.get(reverse("contact-list"), {"search": "nowhere"})
+        resp = self.client.get(reverse("contact-api-list"), {"search": "nowhere"})
         self.assertEqual(resp.json(), [])

@@ -1,0 +1,20 @@
+{% extends "contacts/base.html" %}
+
+{% block content %}
+<h1 class="h3 mb-3">Import contacts from CSV</h1>
+
+<div class="col-md-6 col-lg-5">
+    <p class="text-muted">
+        Expected header: <code>first_name,last_name,phone,email,city,status</code>.
+        Status is matched by name or slug (case-insensitive); unrecognized values fall back to "new".
+    </p>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="mb-3">
+            {{ form.file }}
+        </div>
+        <button type="submit" class="btn btn-primary">Import</button>
+        <a href="{% url 'contact-list' %}" class="btn btn-link">Cancel</a>
+    </form>
+</div>
+{% endblock %}

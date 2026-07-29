@@ -1,0 +1,102 @@
+{% extends "contacts/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Contacts</h1>
+    <div>
+        <a href="{% url 'contact-import' %}" class="btn btn-outline-secondary">Import CSV</a>
+        <a href="{% url 'contact-create' %}" class="btn btn-primary">Add contact</a>
+    </div>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto flex-grow-1">
+        <input type="search" name="search" value="{{ search }}" class="form-control" placeholder="Search name, email, city...">
+    </div>
+    <div class="col-auto">
+        <select name="sort" id="sort-select" class="form-select">
+            <option value="" {% if not sort %}selected{% endif %}>Sort by...</option>
+            <option value="last_name" {% if sort == "last_name" %}selected{% endif %}>Last name (A-Z)</option>
+            <option value="-last_name" {% if sort == "-last_name" %}selected{% endif %}>Last name (Z-A)</option>
+            <option value="created_at" {% if sort == "created_at" %}selected{% endif %}>Oldest first</option>
+            <option value="-created_at" {% if sort == "-created_at" %}selected{% endif %}>Newest first</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-primary">Apply</button>
+    </div>
+</form>
+
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>City</th>
+                <th>Status</th>
+                <th>Added</th>
+                <th>Weather</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for contact in contacts %}
+            <tr data-city="{{ contact.city }}">
+                <td>{{ contact.full_name }}</td>
+                <td>{{ contact.phone }}</td>
+                <td>{{ contact.email }}</td>
+                <td>{{ contact.city }}</td>
+                <td>
+                    <span class="badge {% if contact.status.slug == "new" %}bg-primary{% elif contact.status.slug == "in-progress" %}bg-warning text-dark{% elif contact.status.slug == "lost" %}bg-danger{% else %}bg-secondary{% endif %}">
+                        {{ contact.status.name }}
+                    </span>
+                </td>
+                <td>{{ contact.created_at|date:"Y-m-d" }}</td>
+                <td class="weather-cell">
+                    <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-label="Loading weather"></span>
+                </td>
+                <td>
+                    <a href="{% url 'contact-update' contact.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                    <a href="{% url 'contact-delete' contact.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center text-muted">No contacts yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if is_paginated %}
+<nav aria-label="Contact list pages">
+    <ul class="pagination">
+        {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring %}&{{ querystring }}{% endif %}">Previous</a></li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        {% endif %}
+
+        {% for num in paginator.page_range %}
+            <li class="page-item {% if num == page_obj.number %}active{% endif %}">
+                <a class="page-link" href="?page={{ num }}{% if querystring %}&{{ querystring }}{% endif %}">{{ num }}</a>
+            </li>
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring %}&{{ querystring }}{% endif %}">Next</a></li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'contacts/app.js' %}"></script>
+{% endblock %}

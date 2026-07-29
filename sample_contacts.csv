@@ -1,0 +1,6 @@
+first_name,last_name,phone,email,city,status
+Tomasz,Lewandowski,+48 501 502 503,tomasz.lewandowski@example.com,Poznan,new
+Karolina,Zielinska,+48601602603,karolina.zielinska@example.com,Wroclaw,in progress
+Anna,Kowalska,+48111111111,anna.kowalska@example.com,Warszawa,new
+Bad,Phone,123,bad.phone@example.com,Lodz,lost
+Missing,Email,+48701702703,,Gdynia,new

@@ -1,32 +1,81 @@
 import re
 
+import phonenumbers
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
-PHONE_PATTERN = re.compile(r"\+?\d{9,15}")
+# Numbers typed without a country code are assumed to be Polish. Anything with
+# an explicit "+" prefix is parsed against its own country's rules regardless.
+DEFAULT_PHONE_REGION = "PL"
 
 
-def normalize_phone(value: str) -> str:
-    """Strip separators so "+48 123-456 (789)" and "+48123456789" are one number.
+# Regions offered in the contact form's country picker. Names are ours; the
+# dial codes are read from libphonenumber so the two can never drift apart.
+PHONE_REGIONS = [
+    "PL", "DE", "GB", "CZ", "SK", "UA", "LT", "NL", "FR", "ES", "IT", "US",
+]
+REGION_NAMES = {
+    "PL": "Poland", "DE": "Germany", "GB": "United Kingdom", "CZ": "Czechia",
+    "SK": "Slovakia", "UA": "Ukraine", "LT": "Lithuania", "NL": "Netherlands",
+    "FR": "France", "ES": "Spain", "IT": "Italy", "US": "United States",
+}
 
-    Shared by Contact.save() and the serializer/form validators: uniqueness has
-    to be checked against the same normalized form that gets stored, otherwise
+
+def phone_region_choices():
+    """(code, "Poland (+48)") pairs for the form's country select."""
+    return [
+        (region, f"{REGION_NAMES[region]} (+{phonenumbers.country_code_for_region(region)})")
+        for region in PHONE_REGIONS
+    ]
+
+
+def _parse_phone(value: str, region: str = DEFAULT_PHONE_REGION):
+    """Return a parsed PhoneNumber, or None if the input can't be one.
+
+    `region` only affects numbers typed without a "+" prefix; an explicit
+    country code always wins.
+    """
+    try:
+        parsed = phonenumbers.parse(value or "", region or DEFAULT_PHONE_REGION)
+    except phonenumbers.NumberParseException:
+        return None
+    # is_possible_number checks length against the country's numbering plan.
+    # is_valid_number additionally checks the number is in an allocated range,
+    # which would reject the fake numbers used in demo data and tests.
+    return parsed if phonenumbers.is_possible_number(parsed) else None
+
+
+def normalize_phone(value: str, region: str = DEFAULT_PHONE_REGION) -> str:
+    """Canonicalize to E.164 so one real number has exactly one stored form.
+
+    "111111111", "+48 111-111-111" and "(+48) 111 111 111" all collapse to
+    "+48111111111", which is what makes the per-owner unique constraint
+    meaningful. Shared by Contact.save(), ContactForm and ContactSerializer:
+    uniqueness must be checked against the same form that gets stored, or
     validation passes and the database constraint fails with a 500.
+
+    Unparseable input is returned with separators stripped so that
+    validate_phone_format() is the thing that reports the error.
     """
-    return re.sub(r"[\s\-()]", "", value or "")
+    parsed = _parse_phone(value, region)
+    if parsed is None:
+        return re.sub(r"[\s\-()]", "", value or "")
+    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
 
 
-def validate_phone_format(value: str) -> None:
-    """Require 9-15 digits with an optional leading "+".
+def region_for_phone(value: str) -> str:
+    """Which country a stored number belongs to, for pre-selecting the picker."""
+    parsed = _parse_phone(value)
+    region = phonenumbers.region_code_for_number(parsed) if parsed else None
+    return region if region in REGION_NAMES else DEFAULT_PHONE_REGION
 
-    Normalizes first so this holds whether it receives raw user input or an
-    already-stripped number — DRF runs field validators before validate_phone(),
-    so a formatted "+48 123 456 789" arrives here with its spaces intact.
-    """
-    if not PHONE_PATTERN.fullmatch(normalize_phone(value)):
+
+def validate_phone_format(value: str, region: str = DEFAULT_PHONE_REGION) -> None:
+    """Reject anything libphonenumber can't read as a phone number."""
+    if _parse_phone(value, region) is None:
         raise ValidationError(
-            "Enter 9 to 15 digits, optionally prefixed with '+'.",
+            "Enter a valid phone number, e.g. 123 456 789 or +44 7911 123456.",
             code="invalid_phone",
         )
 

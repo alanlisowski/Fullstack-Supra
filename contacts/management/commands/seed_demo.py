@@ -14,9 +14,9 @@ DEMO_DATA = [
     ]),
     ("demo2", [
         ("John", "Smith", "+441111111111", "john.smith@example.com", "London", "new"),
-        ("Maria", "Garcia", "+341111111112", "maria.garcia@example.com", "Madrid", "in-progress"),
-        ("Luca", "Rossi", "+391111111113", "luca.rossi@example.com", "Roma", "outdated"),
-        ("Sophie", "Dubois", "+331111111114", "sophie.dubois@example.com", "Paris", "new"),
+        ("Maria", "Garcia", "+34611222333", "maria.garcia@example.com", "Madrid", "in-progress"),
+        ("Luca", "Rossi", "+393331112223", "luca.rossi@example.com", "Roma", "outdated"),
+        ("Sophie", "Dubois", "+33612345678", "sophie.dubois@example.com", "Paris", "new"),
     ]),
 ]
 
